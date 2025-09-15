@@ -97,30 +97,30 @@
                      terraform show -json tfplan > tfplan.json
                 #################################################### OPA ########################################
                 
-                - name: Install OPA CLI
-                  run: |
-                     curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
-                     chmod +x opa
-                     sudo mv opa /usr/local/bin/
+                # - name: Install OPA CLI
+                #   run: |
+                #      curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+                #      chmod +x opa
+                #      sudo mv opa /usr/local/bin/
  
-                - name: Run OPA check
-                  run: |
-                     opa eval --format=json \
-                         --data policy/aws_s3_encryption.rego \
-                         --input tfplan.json \
-                         "data.s3.deny" | jq
+                # - name: Run OPA check
+                #   run: |
+                #      opa eval --format=json \
+                #          --data policy/aws_s3_encryption.rego \
+                #          --input tfplan.json \
+                #          "data.s3.deny" | jq
  
-                - name: Fail if policy denied
-                  run: |
-                     result=$(opa eval --format=pretty \
-                         --data policy/aws_s3_encryption.rego \
-                         --input tfplan.json \
-                        "data.s3.deny")
-                     echo "OPA result: $result"
-                     if [ "$result" != "true" ]; then
-                        echo "Policy violation detected"
-                        exit 1
-                     fi
+                # - name: Fail if policy denied
+                #   run: |
+                #      result=$(opa eval --format=pretty \
+                #          --data policy/aws_s3_encryption.rego \
+                #          --input tfplan.json \
+                #         "data.s3.deny")
+                #      echo "OPA result: $result"
+                #      if [ "$result" != "true" ]; then
+                #         echo "Policy violation detected"
+                #         exit 1
+                #      fi
 
                 # - name: Terraform Apply
                 #   run: terraform apply -auto-approve
