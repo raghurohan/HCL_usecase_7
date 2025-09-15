@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.11.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -109,4 +111,5 @@ resource "aws_api_gateway_deployment" "hello_deployment" {
 # Output the API Gateway URL
 output "api_url" {
   value = "${aws_api_gateway_deployment.hello_deployment.invoke_url}/${aws_api_gateway_resource.hello_resource.path_part}"
+
 }
