@@ -122,5 +122,5 @@
                 #         exit 1
                 #      fi
 
-                - name: Terraform Apply
-                  run: terraform apply -auto-approve
+                # - name: Terraform Apply
+                #   run: terraform apply -auto-approve
