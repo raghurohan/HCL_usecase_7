@@ -88,6 +88,10 @@
                 - name: Setup Terraform
                   uses: hashicorp/setup-terraform@v3
 
+                - name: Terraform Format
+                  run: terraform fmt -check
+                  continue-on-error: true               
+
                 - name: Terraform Init
                   run: terraform init
 
@@ -96,31 +100,31 @@
                      terraform plan -out=tfplan
                      terraform show -json tfplan > tfplan.json
                 #################################################### OPA ########################################
+                - name: Setup OPA
+                  run: |
+                        curl -L -o opa https://openpolicyagent.org/downloads/v0.58.0/opa_linux_amd64
+                        chmod +x opa
+                        sudo mv opa /usr/local/bin/
+                        
+                - name: Run OPA Policies
+                  run: |
+                        opa eval --format pretty --data policies/ --input tfplan.json "data.terraform.deny"
+                        opa eval --format pretty --data policies/ --input tfplan.json "data.lambda.deny"
                 
-                # - name: Install OPA CLI
-                #   run: |
-                #      curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
-                #      chmod +x opa
-                #      sudo mv opa /usr/local/bin/
- 
-                # - name: Run OPA check
-                #   run: |
-                #      opa eval --format=json \
-                #          --data policy/aws_s3_encryption.rego \
-                #          --input tfplan.json \
-                #          "data.s3.deny" | jq
- 
-                # - name: Fail if policy denied
-                #   run: |
-                #      result=$(opa eval --format=pretty \
-                #          --data policy/aws_s3_encryption.rego \
-                #          --input tfplan.json \
-                #         "data.s3.deny")
-                #      echo "OPA result: $result"
-                #      if [ "$result" != "true" ]; then
-                #         echo "Policy violation detected"
-                #         exit 1
-                #      fi
-
+                - name: OPA Policy Check
+                  run: |
+                        # Check Terraform policies
+                        terraform_result=$(opa eval --format json --data policies/ --input tfplan.json "data.terraform.deny" | jq '.result[].expressions[].value')
+                        lambda_result=$(opa eval --format json --data policies/ --input tfplan.json "data.lambda.deny" | jq '.result[].expressions[].value')
+                        
+                        if [ "$terraform_result" != "[]" ] || [ "$lambda_result" != "[]" ]; then
+                          echo "OPA policy violations found:"
+                          opa eval --format pretty --data policies/ --input tfplan.json "data.terraform.deny"
+                          opa eval --format pretty --data policies/ --input tfplan.json "data.lambda.deny"
+                          exit 1
+                        else
+                          echo "All OPA policies passed"
+                        fi
+             
                 # - name: Terraform Apply
                 #   run: terraform apply -auto-approve
