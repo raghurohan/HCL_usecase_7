@@ -1,36 +1,51 @@
-name: Destroy Infrastructure
+name: Terraform Destroy
 
 on:
-  workflow_dispatch:   # Allows manual trigger from GitHub UI
-
-permissions:
-  id-token: write      # Required for OIDC
-  contents: read
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
 
 jobs:
-  terraform-destroy:
+  terraform:
     runs-on: ubuntu-latest
+    
+#When using aws-actions/configure-aws-credentials with OIDC, you must give 
+#the job permission to request an OIDC ID token from GitHub
 
-    concurrency:
-      group: terraform-state
-      cancel-in-progress: false   # Prevent multiple jobs from colliding
+    permissions: #OIDC IAM Related
+      id-token: write   # required for requesting OIDC token
+      contents: read    # required for actions/checkout
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::897722687643:role/github_actions
+    - name: Configure AWS credentials from role
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+          role-to-assume: arn:aws:iam::180294178330:role/github_trust_role
+          role-session-name: github-actions
           aws-region: us-east-1
-          audience: sts.amazonaws.com
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.10.0
 
-      - name: Terraform Init
-        run: terraform init -input=false
+    - name: Terraform Format
+      run: terraform fmt -recursive
 
-      - name: Terraform Destroy
-        run: terraform destroy -auto-approve -input=false
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate 
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+        
+    - name: terraform destroy
+      run: terraform destroy -auto-approve

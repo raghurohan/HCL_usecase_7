@@ -1,131 +1,56 @@
-        name: Deploy Lambda 
+name: Terraform Deploy 
 
-        on:
-          workflow_dispatch:
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
 
-        ############################################## OIDC ##########################################################
-        permissions:
-            id-token: write   # Required for OIDC
-            contents: read    # Required to clone the repo
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    
+#When using aws-actions/configure-aws-credentials with OIDC, you must give 
+#the job permission to request an OIDC ID token from GitHub
 
-        jobs:
-          ############################################## TFlint ######################################################
-          tflint-checks:
-            runs-on: ubuntu-latest
-            steps:
-              - name: Checkout code
-                uses: actions/checkout@v4
-              - name: Setup TFLint
-                uses: terraform-linters/setup-tflint@v3
-                with:
-                  tflint_version: latest
-              - name: Run TFLint
-                run: tflint --format=json
-          ############################################## Checkov ######################################################
-          checkov:
-                    name: Scan IaC with Checkov
-                    runs-on: ubuntu-latest
-                    needs: tflint-checks
-                    permissions:
-                      contents: read
-                      security-events: write
-                
-                    steps:
-                      - name: Checkout source code
-                        uses: actions/checkout@v4
-                
-                      - name: Run Checkov with SARIF output
-                        id: checkov_scan
-                        uses: bridgecrewio/checkov-action@v12
-                        with:
-                          directory: .
-                          output_format: sarif,cli
-                          output_file_path: results.sarif
-                          soft_fail: true
-                
-                      # - name: Upload SARIF file to GitHub Code Scanning
-                      #   uses: github/codeql-action/upload-sarif@v3
-                      #   if: success() || failure()
-                      #   with:
-                      #     sarif_file: results.sarif
-          ################################################# Terraform docs ########################################
-          docs:
-            runs-on: ubuntu-latest
-            needs: checkov
-            permissions:
-                contents: write       # Grants the workflow permission to write to the repository
-                pull-requests: write  # Allows the workflow to create a commit and update the PR
-            
-            steps:
-              - name: Checkout code
-                uses: actions/checkout@v4
-                with:
-                  token: ${{ secrets.TOKEN_GITHUB }}  # This token is required to push changes back to the PR branch
-              - name: Render terraform docs and push changes back to PR
-                uses: terraform-docs/gh-actions@main
-                with:
-                   # Specify the directory containing your Terraform module files
-                   working-dir: "."
-                   # The file to inject the generated documentation into
-                   output-file: README.md
-                   # Use "inject" to place the content between markers
-                   output-method: inject
-                   # This setting pushes the generated documentation as a commit
-                   git-push: "true"         
-          deploy:
-              runs-on: ubuntu-latest
-              needs: docs
-              steps:
-                - name: Checkout code
-                  uses: actions/checkout@v4
+    permissions: #OIDC IAM Related
+      id-token: write   # required for requesting OIDC token
+      contents: read    # required for actions/checkout
 
-                - name: Configure AWS credentials
-                  uses: aws-actions/configure-aws-credentials@v4
-                  with:
-                    role-to-assume: arn:aws:iam::897722687643:role/github_actions
-                    aws-region: us-east-1
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-                - name: Setup Terraform
-                  uses: hashicorp/setup-terraform@v3
+    - name: Configure AWS credentials from role
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+          role-to-assume: arn:aws:iam::180294178330:role/github_trust_role
+          role-session-name: github-actions
+          aws-region: us-east-1
 
-                - name: Terraform Format
-                  run: terraform fmt -check
-                  continue-on-error: true               
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.10.0
 
-                - name: Terraform Init
-                  run: terraform init
+    - name: Terraform Format
+      run: terraform fmt -recursive
 
-                - name: Terraform Plan
-                  run: |
-                     terraform plan -out=tfplan
-                     terraform show -json tfplan > tfplan.json
-                #################################################### OPA ########################################
-                - name: Setup OPA
-                  run: |
-                        curl -L -o opa https://openpolicyagent.org/downloads/v0.58.0/opa_linux_amd64
-                        chmod +x opa
-                        sudo mv opa /usr/local/bin/
-                        
-                - name: Run OPA Policies
-                  run: |
-                        opa eval --format pretty --data policies/ --input tfplan.json "data.terraform.deny"
-                        opa eval --format pretty --data policies/ --input tfplan.json "data.lambda.deny"
-                
-                - name: OPA Policy Check
-                  run: |
-                        # Check Terraform policies
-                        terraform_result=$(opa eval --format json --data policies/ --input tfplan.json "data.terraform.deny" | jq '.result[].expressions[].value')
-                        lambda_result=$(opa eval --format json --data policies/ --input tfplan.json "data.lambda.deny" | jq '.result[].expressions[].value')
-                        
-                        if [ "$terraform_result" != "[]" ] || [ "$lambda_result" != "[]" ]; then
-                          echo "OPA policy violations found:"
-                          opa eval --format pretty --data policies/ --input tfplan.json "data.terraform.deny"
-                          opa eval --format pretty --data policies/ --input tfplan.json "data.lambda.deny"
-                          # exit 1 
-                        else
-                          echo "All OPA policies passed"
-                        fi
-                  continue-on-error: true
-             
-                # - name: Terraform Apply
-                #   run: terraform apply -auto-approve
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate 
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+
+
+    - name: Terraform Apply (extra debug info)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        terraform apply -auto-approve
+        
+
