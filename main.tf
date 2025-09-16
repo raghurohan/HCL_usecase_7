@@ -1,18 +1,3 @@
-terraform {
-  required_version = ">= 1.11.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-east-1" # Change to your preferred region
-}
-
 # IAM role for Lambda execution
 resource "aws_iam_role" "lambda_exec" {
   name = "lambda_exec_role"
