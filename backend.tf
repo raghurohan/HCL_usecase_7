@@ -5,13 +5,13 @@ provider "aws" {
 terraform {
   required_version = ">= 1.11.0"
   backend "s3" {
-    bucket        = "897722687643-web-tf-state-bucket"
+    bucket        = ""remotestate11""
     key           = "usecase7/terraform.tfstate"
     region        = "us-east-1"
     encrypt       = true
     use_lockfile  = true # Enables native S3 state locking
   }
-}
+
 
   required_providers {
     aws = {
